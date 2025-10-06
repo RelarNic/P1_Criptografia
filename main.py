@@ -32,4 +32,11 @@ def save_database(db):
         json.dump(db, f, indent=2, ensure_ascii=False, sort_keys=True)
     os.replace(tmp, DB_PATH)
 
+# Código principal para probar las funciones
+if __name__ == "__main__":
+    print("Cargando/creando base de datos...")
+    db = load_db()
+    print(f"Base de datos cargada: {db}")
+    print(f"Archivo creado en: {DB_PATH}")
+
 
