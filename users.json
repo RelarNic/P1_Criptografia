@@ -3,10 +3,15 @@
     "note": "Gestión de Cartera de Activos Cifrada UC3M- Por Nicolás Juliá y Miguel Alcaide"
   },
   "users": {
-    "nico": {
-      "password": "4059c1bda640e9795a1853ea1b5367c90c658bea2fb6778bdc5ae3ff73a91b8f",
-      "portfolio": [],
-      "salt": "895afe376f42d285cb76e2a83f07f366"
+    "n": {
+      "password": "846e0d194aa04bce0d331de9c8fdc7f900707567a4a912a22cb586bc512a7126",
+      "portfolio": {
+        "n": {
+          "cantidad": 1.0,
+          "precio": 1.0
+        }
+      },
+      "salt": "17cc1e472d56b5e001161e7a93fd9ceb"
     }
   }
 }

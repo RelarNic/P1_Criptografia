@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305, AESGCM
 # Constantes para PBKDF2 (usadas en hashing de contraseñas)
 
 L=32  # Longitud de la clave derivada en bytes
-i=1_200_000  # Número de iteraciones para PBKDF2
+I=1_200_000  # Número de iteraciones para PBKDF2
 
 #Ruta del archivo JSON de la base de datos (usuarios y carteras)
 #environ toma en primer lugar la base de datos definida en variables de entorno, sino usa users.json por defecto
@@ -75,7 +75,7 @@ def create_user(db):
     db.setdefault("users", {})[username] = {
         "password": key_pswd,
         "salt": salt.hex(),
-        "portfolio": [],
+        "portfolio": {},
     }
     save_database(db)
     print(f"Usuario '{username}' creado con éxito.\n")
@@ -87,7 +87,7 @@ def passwd_hash_derive(password: str, salt: bytes) -> str:
         algorithm=hashes.SHA256(),
         length=L,
         salt=salt,
-        iterations=i,
+        iterations=I,
     )
     key = kdf.derive(password.encode())
     return key.hex()
@@ -97,8 +97,82 @@ def login_user(db):
     print("=== Iniciar sesión ===")
     user = input("Usuario: ").strip()
     password = getpass.getpass("Contraseña: ")
+    user_check = db.get("users", {}).get(user)
+    if not user_check:
+        print("Usuario no encontrado.\n")
+        return 
+    else:
+        salt = bytes.fromhex(user_check.get("salt", ""))
+        key = user_check.get("password", "")
+        if not passwd_hash_verify(password, salt, key):
+            print("Contraseña incorrecta.\n")
+            return 
+    print(f"Bienvenido/a, {user}.\n")
+    return user
 
+def passwd_hash_verify(password: str, salt: bytes, key_hex: str) -> bool:
+	"""Verifica que la contraseña proporcionada coincide con el hash almacenado."""
+	kdf = PBKDF2HMAC(
+		algorithm=hashes.SHA256(),
+		length=L,
+		salt=salt,
+		iterations=I,
+	)
+	try:
+		kdf.verify(password.encode(), bytes.fromhex(key_hex))
+		return True
+	except Exception:
+		return False
+
+
+def logged_menu(db, username):
+    while True:
+        print("Menú de Cartera:")
+        print("1) Agregar activo")
+        print("2) Mostrar cartera")
+        print("3) Cerrar sesión")
+        choice = input("> ").strip()
+        if choice == "1":
+            add_asset(db, username)
+        elif choice == "2":
+            show_portfolio(db, username)
+        elif choice == "3":
+            print("Sesión cerrada.\n")
+            break
+        else:
+            print("Opción inválida.\n")
+            
+def add_asset(db, username):
+    print("=== Agregar activo ===")
+    activo = input("Nombre del activo: ").strip()
+    price = input("Precio medio de compra: ").strip()
+    quantity = input("Cantidad: ").strip()
+    if not activo or not price or not quantity:
+        print("Todos los campos son obligatorios.\n")
+        return
     
+    # Asegurar que portfolio existe como diccionario
+    portfolio = db.setdefault("users", {}).setdefault(username, {}).setdefault("portfolio", {})
+    
+    # Agregar el activo con su precio y cantidad
+    portfolio[activo] = {
+        "precio": float(price),
+        "cantidad": float(quantity)
+    }
+    
+    save_database(db)
+    print(f"Activo '{activo}' agregado a la cartera de {username}.\n")
+    
+def show_portfolio(db, username):
+    print(f"=== Cartera de {username} ===")
+    portfolio = db.get("users", {}).get(username, {}).get("portfolio", [])
+    if not portfolio:
+        print("La cartera está vacía.\n")
+        return
+    for activo in portfolio:
+        activo_esp = portfolio[activo]
+        print(f"Activo: {activo}, Precio medio de compra: {activo_esp['precio']}, Cantidad: {activo_esp['cantidad']}")
+    print("")  # Línea en blanco al final
 
 
 # Código principal para probar las funciones
@@ -109,7 +183,7 @@ if __name__ == "__main__":
     #para comprobar funciones, luego se quitan 
     print("Cargando/creando base de datos...")
     db = load_db()
-    print(f"Base de datos cargada: {db}")
+    print(f"Base de datos cargada")
     print(f"Archivo creado en: {DB_PATH}")
     funcionando = True
     while funcionando:
@@ -120,10 +194,18 @@ if __name__ == "__main__":
         print("4. Salir")
         eleccion = input("Seleccione una opción: ").strip()
         if eleccion == "1":
-            if login_user(db):
-                logged_menu(db)
+            username = login_user(db)
+            if username:
+                logged_menu(db, username)
             else:
                 print("Error en el inicio de sesión.\n")
         elif eleccion == "2":
             create_user(db)
-        
+        elif eleccion == "3":
+            j = 1
+            for username in db.get("users", {}):
+                print(str(j) + " - " + username)
+                j += 1
+        elif eleccion == "4":
+            print("Saliendo del programa. ¡Hasta luego!")
+            funcionando = False
