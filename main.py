@@ -9,7 +9,10 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305, AESGCM
 
 
-# Constantes para Scrypt (usadas en hashing de contraseñas)
+# Constantes para PBKDF2 (usadas en hashing de contraseñas)
+
+L=32  # Longitud de la clave derivada en bytes
+i=1_200_000  # Número de iteraciones para PBKDF2
 
 #Ruta del archivo JSON de la base de datos (usuarios y carteras)
 #environ toma en primer lugar la base de datos definida en variables de entorno, sino usa users.json por defecto
@@ -51,14 +54,51 @@ def create_user(db):
     if username in db.get("users", {}):
         print("El usuario ya existe.\n")
         return
+    #con getpass no se muestra la contraseña en pantalla
     password = getpass.getpass("Contraseña: ")
     password_confirm = getpass.getpass("Confirmar contraseña: ")
     if password != password_confirm:
         print("Las contraseñas no coinciden.\n")
         return
     #Ahora creacion de salt, hash y guardado en db
-     
+    #El salt permite que el mismo password genere hashes diferentes
+    salt = os.urandom(16)  # Genera un salt aleatorio de 16 bytes
+    #PBKDF2HMAC es una función de derivación de claves que aplica 
+    #repetidamente una función hash (SHA256) para hacer más difícil ataques de fuerza bruta
+    #Se prefiere a scrypt porque menos consumo de memoria y CPU
+    #aunque scrypt es más seguro contra ataques de hardware especializado
+    #despues se usará chacha20poly1305 para cifrar las carteras
+    key_pswd = passwd_hash_derive(password, salt)
+    #Almacenamiento en la base de datos
+    # Asegura que existe la sección de usuarios
+    #guardamos el salt porque es necesario para verificar la contraseña luego
+    db.setdefault("users", {})[username] = {
+        "password": key_pswd,
+        "salt": salt.hex(),
+        "portfolio": [],
+    }
+    save_database(db)
+    print(f"Usuario '{username}' creado con éxito.\n")
 
+
+def passwd_hash_derive(password: str, salt: bytes) -> str:
+    """Deriva una clave segura a partir de la contraseña y el salt usando PBKDF2."""
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=L,
+        salt=salt,
+        iterations=i,
+    )
+    key = kdf.derive(password.encode())
+    return key.hex()
+
+
+def login_user(db):
+    print("=== Iniciar sesión ===")
+    user = input("Usuario: ").strip()
+    password = getpass.getpass("Contraseña: ")
+
+    
 
 
 # Código principal para probar las funciones
@@ -79,3 +119,11 @@ if __name__ == "__main__":
         print("3. Mostrar usuarios (solo nombres)") 
         print("4. Salir")
         eleccion = input("Seleccione una opción: ").strip()
+        if eleccion == "1":
+            if login_user(db):
+                logged_menu(db)
+            else:
+                print("Error en el inicio de sesión.\n")
+        elif eleccion == "2":
+            create_user(db)
+        
