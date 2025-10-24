@@ -12,7 +12,11 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305, AESGCM
 # Constantes para PBKDF2 (usadas en hashing de contraseñas)
 
 L=32  # Longitud de la clave derivada en bytes
-I=1_200_000  # Número de iteraciones para PBKDF2
+P=1  # Parámetro de paralelismo para Scrypt
+N=2**14  # Factor de costo para Scrypt
+R=8  # Bloque de tamaño para Scrypt
+
+
 
 #Ruta del archivo JSON de la base de datos (usuarios y carteras)
 #environ toma en primer lugar la base de datos definida en variables de entorno, sino usa users.json por defecto
@@ -80,14 +84,63 @@ def create_user(db):
     save_database(db)
     print(f"Usuario '{username}' creado con éxito.\n")
 
-
-def passwd_hash_derive(password: str, salt: bytes) -> str:
-    """Deriva una clave segura a partir de la contraseña y el salt usando PBKDF2."""
+#Ultima parte del projecto, cifrar carteras
+def encrypt_portfolio(portfolio, password):
+    salt = os.urandom(16)
+    #Empieza generando una clave con PDFK2HMAC (derivada de la contraseña) que luego usa ChaCha20Poly1305
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
-        length=L,
+        length=32,
         salt=salt,
-        iterations=I,
+        iterations=1_200_000,
+    )
+    key = kdf.derive(password.encode())
+    
+    chacha = ChaCha20Poly1305(key)
+    #chacha es un valor aleatorio que debe ser único para cada cifrado con la misma clave
+    nonce = os.urandom(12)  # Nonce de 12 bytes para ChaCha20Poly1305
+    #nonce no se repite nunca con la misma clave
+    aad = b"portfolio data for user"  # Datos autenticados adicionales, verifican integridad pero no se cifran
+    data = json.dumps(portfolio).encode()  # Convierte la cartera a JSON y luego a bytes
+    ct = chacha.encrypt(nonce, data, aad)  # Cifra los datos con ChaCha20Poly1305
+
+    return {
+        "ciphertext": ct.hex(),
+        "nonce": nonce.hex(),
+        "salt": salt.hex()
+    }
+
+def decrypt_portfolio(enc_data, password):
+    salt = bytes.fromhex(enc_data["salt"])
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=1_200_000,
+    )
+    key = kdf.derive(password.encode())
+    
+    chacha = ChaCha20Poly1305(key)
+    nonce = bytes.fromhex(enc_data["nonce"])
+    aad = b"portfolio data for user"
+    ct = bytes.fromhex(enc_data["ciphertext"])
+    
+    try:
+        data = chacha.decrypt(nonce, ct, aad)
+        portfolio = json.loads(data.decode())
+        return portfolio
+    except Exception:
+        print("Error al descifrar la cartera")
+        return None
+
+def passwd_hash_derive(password: str, salt: bytes) -> str:
+    """Deriva una clave segura a partir de la contraseña y el salt usando Scrypt."""
+    kdf = Scrypt(
+        salt=salt,
+        length=L,
+        n=N,
+        r=R,
+        p=P,
     )
     key = kdf.derive(password.encode())
     return key.hex()
@@ -112,12 +165,13 @@ def login_user(db):
 
 def passwd_hash_verify(password: str, salt: bytes, key_hex: str) -> bool:
 	"""Verifica que la contraseña proporcionada coincide con el hash almacenado."""
-	kdf = PBKDF2HMAC(
-		algorithm=hashes.SHA256(),
-		length=L,
-		salt=salt,
-		iterations=I,
-	)
+	kdf = Scrypt(
+        salt=salt,
+        length=L,
+        n=N,
+        r=R,
+        p=P,
+    )
 	try:
 		kdf.verify(password.encode(), bytes.fromhex(key_hex))
 		return True
@@ -151,8 +205,17 @@ def add_asset(db, username):
         print("Todos los campos son obligatorios.\n")
         return
     
-    # Asegurar que portfolio existe como diccionario
-    portfolio = db.setdefault("users", {}).setdefault(username, {}).setdefault("portfolio", {})
+    user = db["users"][username]  # Referencia directa al usuario
+    
+    # Descifra la cartera actual si está cifrada
+    if "encrypted_portfolio" in user:
+        password = getpass.getpass("Contraseña para descifrar cartera: ")
+        portfolio = decrypt_portfolio(user["encrypted_portfolio"], password)
+        if portfolio is None:
+            return
+    else:
+        # Primera vez: usar portfolio sin cifrar (diccionario)
+        portfolio = user.get("portfolio", {})
     
     # Agregar el activo con su precio y cantidad
     portfolio[activo] = {
@@ -160,19 +223,42 @@ def add_asset(db, username):
         "cantidad": float(quantity)
     }
     
+    # CIFRAR la cartera después de agregar el activo
+    password = getpass.getpass("Contraseña para cifrar cartera: ")
+    encrypted = encrypt_portfolio(portfolio, password)
+    
+    # Actualizar usuario con portfolio cifrado
+    user["encrypted_portfolio"] = encrypted
+    if "portfolio" in user:
+        del user["portfolio"]  # Eliminar versión sin cifrar por seguridad
+    
     save_database(db)
-    print(f"Activo '{activo}' agregado a la cartera de {username}.\n")
+    print(f"Activo '{activo}' agregado y cartera cifrada.\n")
     
 def show_portfolio(db, username):
     print(f"=== Cartera de {username} ===")
-    portfolio = db.get("users", {}).get(username, {}).get("portfolio", [])
+    user = db["users"][username]
+    
+    # Verificar si hay cartera cifrada
+    if "encrypted_portfolio" not in user:
+        print("No hay cartera cifrada.\n")
+        return
+    
+    password = getpass.getpass("Contraseña para descifrar: ")
+    portfolio = decrypt_portfolio(user["encrypted_portfolio"], password)
+    
+    if portfolio is None:
+        return  # Error al descifrar
+    
     if not portfolio:
         print("La cartera está vacía.\n")
-        return
-    for activo in portfolio:
-        activo_esp = portfolio[activo]
-        print(f"Activo: {activo}, Precio medio de compra: {activo_esp['precio']}, Cantidad: {activo_esp['cantidad']}")
-    print("")  # Línea en blanco al final
+    else:
+        print("Activos en la cartera:")
+        for activo, datos in portfolio.items():
+            print(f" - {activo}: Precio medio ${datos['precio']}, Cantidad {datos['cantidad']}")
+        print()  # Línea en blanco al final
+
+
 
 
 # Código principal para probar las funciones

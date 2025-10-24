@@ -12,6 +12,15 @@
         }
       },
       "salt": "17cc1e472d56b5e001161e7a93fd9ceb"
+    },
+    "nico": {
+      "encrypted_portfolio": {
+        "ciphertext": "1ead34146478267399654b35babf2195180a353c9d98d77aafc95b0abd0afc2ce9eeb31cae084a920ae12bedc87a3a8795be4c7b0ccaa3dfc39c08ed4bc5376d9f",
+        "nonce": "810e790b33195d1934d79434",
+        "salt": "60cc5a20bec0f1933c693dcc66c8a4d4"
+      },
+      "password": "d6f6148ded8e155b33fd720e17a9f35535d355cc835e66d1b353c9bf7780739f",
+      "salt": "6faed5c069d0cce6fb92396496059668"
     }
   }
 }
