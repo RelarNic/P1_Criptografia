@@ -3,24 +3,16 @@
     "note": "Gestión de Cartera de Activos Cifrada UC3M- Por Nicolás Juliá y Miguel Alcaide"
   },
   "users": {
-    "n": {
-      "password": "846e0d194aa04bce0d331de9c8fdc7f900707567a4a912a22cb586bc512a7126",
+    "nico": {
+      "password": "a06d635a267f0bda265b0781604b64fcfeb6d3f92a2f7914f76c9394febc4ee2",
       "portfolio": {
-        "n": {
-          "cantidad": 1.0,
-          "precio": 1.0
+        "btceur": {
+          "ciphertext": "f4348648a4a051254baa470b7e99edd7de0fd57f99e80d5be78433b0117e13932c5aa7ffa383b6aa89b43050e5f1b9b5bdbcf296",
+          "nonce": "dd8634a0ea0683a7a509acb6"
         }
       },
-      "salt": "17cc1e472d56b5e001161e7a93fd9ceb"
-    },
-    "nico": {
-      "encrypted_portfolio": {
-        "ciphertext": "1ead34146478267399654b35babf2195180a353c9d98d77aafc95b0abd0afc2ce9eeb31cae084a920ae12bedc87a3a8795be4c7b0ccaa3dfc39c08ed4bc5376d9f",
-        "nonce": "810e790b33195d1934d79434",
-        "salt": "60cc5a20bec0f1933c693dcc66c8a4d4"
-      },
-      "password": "d6f6148ded8e155b33fd720e17a9f35535d355cc835e66d1b353c9bf7780739f",
-      "salt": "6faed5c069d0cce6fb92396496059668"
+      "portfolio_salt": "b094eac6bafe414d3b28d4601ed5839d",
+      "salt": "267fbd5147e389b298ea2c1b0e665905"
     }
   }
 }
